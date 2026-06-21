@@ -11,6 +11,7 @@ public class Target {
     private RetryPolicy retryPolicy;
     private DeadLetterConfig deadLetterConfig;
     private SqsParameters sqsParameters;
+    private EventBridgeParameters eventBridgeParameters;
 
     public Target() {}
 
@@ -38,4 +39,7 @@ public class Target {
 
     public SqsParameters getSqsParameters() { return sqsParameters; }
     public void setSqsParameters(SqsParameters sqsParameters) { this.sqsParameters = sqsParameters; }
+
+    public EventBridgeParameters getEventBridgeParameters() { return eventBridgeParameters; }
+    public void setEventBridgeParameters(EventBridgeParameters eventBridgeParameters) { this.eventBridgeParameters = eventBridgeParameters; }
 }

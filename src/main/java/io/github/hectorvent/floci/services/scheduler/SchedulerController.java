@@ -3,6 +3,7 @@ package io.github.hectorvent.floci.services.scheduler;
 import io.github.hectorvent.floci.core.common.AwsException;
 import io.github.hectorvent.floci.core.common.RegionResolver;
 import io.github.hectorvent.floci.services.scheduler.model.DeadLetterConfig;
+import io.github.hectorvent.floci.services.scheduler.model.EventBridgeParameters;
 import io.github.hectorvent.floci.services.scheduler.model.FlexibleTimeWindow;
 import io.github.hectorvent.floci.services.scheduler.model.RetryPolicy;
 import io.github.hectorvent.floci.services.scheduler.model.Schedule;
@@ -267,6 +268,19 @@ public class SchedulerController {
                 sp.put("MessageGroupId", s.getTarget().getSqsParameters().getMessageGroupId());
                 t.put("SqsParameters", sp);
             }
+            if (s.getTarget().getEventBridgeParameters() != null) {
+                EventBridgeParameters ebp = s.getTarget().getEventBridgeParameters();
+                Map<String, Object> eb = new HashMap<>();
+                if (ebp.getDetailType() != null) {
+                    eb.put("DetailType", ebp.getDetailType());
+                }
+                if (ebp.getSource() != null) {
+                    eb.put("Source", ebp.getSource());
+                }
+                if (!eb.isEmpty()) {
+                    t.put("EventBridgeParameters", eb);
+                }
+            }
             r.put("Target", t);
         }
         if (s.getDescription() != null) {
@@ -401,6 +415,17 @@ public class SchedulerController {
                 sp.setMessageGroupId(spNode.get("MessageGroupId").asText());
             }
             target.setSqsParameters(sp);
+        }
+        if (node.has("EventBridgeParameters") && !node.get("EventBridgeParameters").isNull()) {
+            JsonNode ebNode = node.get("EventBridgeParameters");
+            EventBridgeParameters ebp = new EventBridgeParameters();
+            if (ebNode.has("DetailType") && !ebNode.get("DetailType").isNull()) {
+                ebp.setDetailType(ebNode.get("DetailType").asText());
+            }
+            if (ebNode.has("Source") && !ebNode.get("Source").isNull()) {
+                ebp.setSource(ebNode.get("Source").asText());
+            }
+            target.setEventBridgeParameters(ebp);
         }
         return target;
     }

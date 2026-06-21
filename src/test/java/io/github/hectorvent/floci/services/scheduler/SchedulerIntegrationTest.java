@@ -407,6 +407,36 @@ class SchedulerIntegrationTest {
 
     @Test
     @Order(21)
+    void createScheduleWithEventBridgeParametersRoundTrips() {
+        given()
+            .contentType("application/json")
+            .body("""
+                {
+                    "ScheduleExpression": "rate(1 hour)",
+                    "FlexibleTimeWindow": {"Mode": "OFF"},
+                    "Target": {
+                        "Arn": "arn:aws:events:us-east-1:000000000000:event-bus/my-bus",
+                        "RoleArn": "arn:aws:iam::000000000000:role/scheduler-role",
+                        "EventBridgeParameters": {"DetailType": "schedule.completed", "Source": "my.app"}
+                    }
+                }
+                """)
+        .when()
+            .post("/schedules/eb-schedule")
+        .then()
+            .statusCode(200);
+
+        given()
+        .when()
+            .get("/schedules/eb-schedule")
+        .then()
+            .statusCode(200)
+            .body("Target.EventBridgeParameters.DetailType", equalTo("schedule.completed"))
+            .body("Target.EventBridgeParameters.Source", equalTo("my.app"));
+    }
+
+    @Test
+    @Order(21)
     void createScheduleInGroup() {
         // First create the group
         given()
