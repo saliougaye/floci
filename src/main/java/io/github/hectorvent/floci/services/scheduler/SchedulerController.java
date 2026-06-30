@@ -427,7 +427,7 @@ public class SchedulerController {
                     && !ebNode.get("Source").asText().isBlank()) {
                 ebp.setSource(ebNode.get("Source").asText());
             }
-            if (ebp.getDetailType() != null || ebp.getSource() != null) {
+            if (ebp.getDetailType() != null && ebp.getSource() != null) {
                 target.setEventBridgeParameters(ebp);
             }
         }
