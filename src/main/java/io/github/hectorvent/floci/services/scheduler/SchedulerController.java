@@ -419,17 +419,40 @@ public class SchedulerController {
         if (node.has("EventBridgeParameters") && !node.get("EventBridgeParameters").isNull()) {
             JsonNode ebNode = node.get("EventBridgeParameters");
             EventBridgeParameters ebp = new EventBridgeParameters();
-            if (ebNode.has("DetailType") && !ebNode.get("DetailType").isNull()
-                    && !ebNode.get("DetailType").asText().isBlank()) {
+            if (
+                ebNode.has("DetailType") &&
+                !ebNode.get("DetailType").isNull() &&
+                !ebNode.get("DetailType").asText().isBlank()
+            ) {
                 ebp.setDetailType(ebNode.get("DetailType").asText());
             }
-            if (ebNode.has("Source") && !ebNode.get("Source").isNull()
-                    && !ebNode.get("Source").asText().isBlank()) {
+            if (
+                ebNode.has("Source") &&
+                !ebNode.get("Source").isNull() &&
+                !ebNode.get("Source").asText().isBlank()
+            ) {
                 ebp.setSource(ebNode.get("Source").asText());
             }
-            if (ebp.getDetailType() != null && ebp.getSource() != null) {
-                target.setEventBridgeParameters(ebp);
+            if (ebp.getDetailType() == null || ebp.getSource() == null) {
+                 throw new AwsException("ValidationException",
+                    "EventBridgeParameters requires both DetailType and Source.", 400);
             }
+
+            if(ebp.getDetailType().length() > 128) {
+                throw new AwsException("ValidationException",
+                    "EventBridgeParameters DetailType must be less than or equal to 128 characters.", 400);
+            }
+            if(ebp.getSource().length() > 256) {
+                throw new AwsException("ValidationException",
+                    "EventBridgeParameters Source must be less than or equal to 256 characters.", 400);
+            }
+
+            if(ebp.getSource().startsWith("aws.") || ebp.getSource().startsWith("aws:")) {
+                throw new AwsException("ValidationException",
+                    "EventBridgeParameters Source cannot start with 'aws.' or 'aws:'.", 400);
+            }
+
+            target.setEventBridgeParameters(ebp);
         }
         return target;
     }
