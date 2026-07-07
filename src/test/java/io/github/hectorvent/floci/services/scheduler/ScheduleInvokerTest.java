@@ -147,6 +147,8 @@ class ScheduleInvokerTest {
         assertEquals("aws.scheduler", entry.get("Source"));
         assertEquals("Scheduled Event", entry.get("DetailType"));
     }
+
+    @Test
     void ecsSchedulerTargetRunsTaskWithNetworkConfiguration() {
         Target target = new Target();
         target.setArn("arn:aws:ecs:us-east-1:000000000000:cluster/proof");
