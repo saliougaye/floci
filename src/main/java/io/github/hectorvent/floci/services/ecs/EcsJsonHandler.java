@@ -25,6 +25,7 @@ import io.github.hectorvent.floci.services.ecs.model.ServiceDeployment;
 import io.github.hectorvent.floci.services.ecs.model.ServiceRevision;
 import io.github.hectorvent.floci.services.ecs.model.TaskDefinition;
 import io.github.hectorvent.floci.services.ecs.model.TaskSet;
+import io.github.hectorvent.floci.services.ecs.model.EfsVolumeConfiguration;
 import io.github.hectorvent.floci.services.ecs.model.Volume;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -280,9 +281,11 @@ public class EcsJsonHandler {
         String startedBy = req.has("startedBy") ? req.path("startedBy").asText() : null;
         List<ContainerOverride> containerOverrides =
                 parseContainerOverrides(req.path("overrides").path("containerOverrides"));
+        NetworkConfiguration networkConfiguration =
+                parseNetworkConfiguration(req.path("networkConfiguration"));
 
         List<EcsTask> launched = service.runTask(cluster, taskDefinition, count,
-                launchType, group, startedBy, containerOverrides, region);
+                launchType, group, startedBy, containerOverrides, networkConfiguration, region);
 
         ObjectNode resp = objectMapper.createObjectNode();
         ArrayNode arr = objectMapper.createArrayNode();
@@ -443,7 +446,10 @@ public class EcsJsonHandler {
         return result;
     }
 
-    private NetworkConfiguration parseNetworkConfiguration(JsonNode node) {
+    /** Parse an ECS {@code networkConfiguration} node (camelCase, as the data-plane API uses).
+     *  Public so the Step Functions ecs:runTask integration can reuse it after recasing its
+     *  PascalCase input, rather than duplicating the awsvpc parsing. */
+    public NetworkConfiguration parseNetworkConfiguration(JsonNode node) {
         if (node == null || !node.isObject() || !node.hasNonNull("awsvpcConfiguration")) {
             return null;
         }
@@ -951,6 +957,31 @@ public class EcsJsonHandler {
                     host.put("sourcePath", v.hostSourcePath());
                     vNode.set("host", host);
                 }
+                if (v.efs() != null) {
+                    EfsVolumeConfiguration e = v.efs();
+                    ObjectNode efs = objectMapper.createObjectNode();
+                    efs.put("fileSystemId", e.fileSystemId());
+                    if (e.rootDirectory() != null) {
+                        efs.put("rootDirectory", e.rootDirectory());
+                    }
+                    if (e.transitEncryption() != null) {
+                        efs.put("transitEncryption", e.transitEncryption());
+                    }
+                    if (e.transitEncryptionPort() != null) {
+                        efs.put("transitEncryptionPort", e.transitEncryptionPort());
+                    }
+                    if (e.accessPointId() != null || e.iam() != null) {
+                        ObjectNode auth = objectMapper.createObjectNode();
+                        if (e.accessPointId() != null) {
+                            auth.put("accessPointId", e.accessPointId());
+                        }
+                        if (e.iam() != null) {
+                            auth.put("iam", e.iam());
+                        }
+                        efs.set("authorizationConfig", auth);
+                    }
+                    vNode.set("efsVolumeConfiguration", efs);
+                }
                 vols.add(vNode);
             }
             n.set("volumes", vols);
@@ -1007,7 +1038,9 @@ public class EcsJsonHandler {
         return n;
     }
 
-    private ObjectNode taskNode(EcsTask t) {
+    /** Renders an ECS task to its data-plane JSON shape. Reused by the Step Functions
+     *  ecs:runTask integration ({@link io.github.hectorvent.floci.services.stepfunctions.AslExecutor}). */
+    public ObjectNode taskNode(EcsTask t) {
         ObjectNode n = objectMapper.createObjectNode();
         n.put("taskArn", t.getTaskArn());
         n.put("clusterArn", t.getClusterArn());
@@ -1292,9 +1325,30 @@ public class EcsJsonHandler {
         }
         for (JsonNode item : node) {
             String hostSourcePath = item.path("host").path("sourcePath").asText(null);
-            result.add(new Volume(item.path("name").asText(), hostSourcePath));
+            EfsVolumeConfiguration efs = parseEfsVolumeConfiguration(item.path("efsVolumeConfiguration"));
+            result.add(new Volume(item.path("name").asText(), hostSourcePath, efs));
         }
         return result;
+    }
+
+    private EfsVolumeConfiguration parseEfsVolumeConfiguration(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            return null;
+        }
+        String fileSystemId = node.path("fileSystemId").asText(null);
+        if (fileSystemId == null) {
+            return null;
+        }
+        Integer transitEncryptionPort = node.path("transitEncryptionPort").isNumber()
+                ? node.path("transitEncryptionPort").asInt() : null;
+        JsonNode auth = node.path("authorizationConfig");
+        return new EfsVolumeConfiguration(
+                fileSystemId,
+                node.path("rootDirectory").asText(null),
+                node.path("transitEncryption").asText(null),
+                transitEncryptionPort,
+                auth.path("accessPointId").asText(null),
+                auth.path("iam").asText(null));
     }
 
     private List<MountPoint> parseMountPoints(JsonNode node) {
@@ -1311,7 +1365,9 @@ public class EcsJsonHandler {
         return result;
     }
 
-    private List<ContainerOverride> parseContainerOverrides(JsonNode node) {
+    /** Parses ECS container overrides from data-plane JSON. Reused by the Step Functions
+     *  ecs:runTask integration ({@link io.github.hectorvent.floci.services.stepfunctions.AslExecutor}). */
+    public List<ContainerOverride> parseContainerOverrides(JsonNode node) {
         List<ContainerOverride> result = new ArrayList<>();
         if (!node.isArray()) {
             return result;
